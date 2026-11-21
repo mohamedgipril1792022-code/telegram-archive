@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>أرشيف الأحكام على تليجرام</title>
+<style>
+  :root{--bg:#f4f5f7;--card:#fff;--ink:#1d2433;--muted:#6b7385;--line:#e2e5eb;--acc:#1f5fbf;--ok:#1e7d4f;--err:#b3261e;--warn:#9a6700}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:"Segoe UI",Tahoma,Arial,sans-serif;background:var(--bg);color:var(--ink);font-size:16px}
+  .wrap{max-width:760px;margin:28px auto;padding:0 16px 40px}
+  header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  h1{font-size:23px;margin:0}
+  .ver{font-size:13px;color:var(--muted);background:var(--card);border:1px solid var(--line);border-radius:20px;padding:4px 12px;cursor:pointer;user-select:none}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:18px 20px;margin-bottom:14px}
+  .card h2{font-size:17px;margin:0 0 12px}
+  label{display:block;font-weight:600;margin:10px 0 6px}
+  .hint{color:var(--muted);font-size:13px;margin-top:6px;line-height:1.7}
+  input[type=text],input[type=password]{width:100%;font-size:16px;padding:10px 12px;border:1px solid var(--line);border-radius:8px;font-family:inherit;direction:ltr;text-align:left}
+  button{font-family:inherit;font-size:15px;border:0;border-radius:8px;padding:10px 16px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .btn-sec{background:#e9eef8;color:var(--acc);font-weight:600}
+  .btn-pri{background:var(--acc);color:#fff;font-weight:700;font-size:17px;padding:13px 22px}
+  .btn-stop{background:#fbe9e7;color:var(--err);font-weight:700;font-size:17px;padding:13px 22px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .msg{margin-top:10px;font-weight:600}
+  .ok{color:var(--ok)} .err{color:var(--err)} .warn{color:var(--warn)} .muted{color:var(--muted)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:12px}
+  .stat{background:var(--bg);border-radius:8px;padding:10px;text-align:center}
+  .stat b{display:block;font-size:22px}
+  .stat span{font-size:12px;color:var(--muted)}
+  .bar{height:12px;background:var(--bg);border-radius:6px;overflow:hidden;margin:14px 0 8px}
+  .bar div{height:100%;width:0;background:var(--ok);transition:width .3s}
+  #log{list-style:none;margin:10px 0 0;padding:0;max-height:300px;overflow:auto;font-size:14px;line-height:1.8;border-top:1px solid var(--line)}
+  #log li{border-bottom:1px solid var(--line);padding:2px 0}
+  .chk{display:flex;gap:8px;align-items:center;font-weight:400;margin-top:10px}
+  @media (max-width:560px){.stats{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>أرشيف الأحكام على تليجرام</h1>
+    <span class="ver" id="ver" title="اضغط لعرض تاريخ النسخة">نسخة ١ · ٢١-١١-٢٠٢٦</span>
+  </header>
+
+  <!-- ١- الإعدادات -->
+  <div class="card">
+    <h2>١- البوت والقناة <span class="muted" style="font-weight:400;font-size:13px">(مرة واحدة بس، وبتتحفظ على اللاب)</span></h2>
+    <label for="token">توكن البوت</label>
+    <input type="password" id="token" placeholder="123456789:AA...">
+    <label for="chat">رقم القناة</label>
+    <div class="row">
+      <input type="text" id="chat" placeholder="-100..." style="flex:1">
+      <button class="btn-sec" id="getChat">جلب رقم القناة</button>
+    </div>
+    <div class="hint">لجلب رقم القناة: ابعت أي رسالة في القناة (بعد ما تضيف البوت أدمن)، وبعدين اضغط «جلب رقم القناة».</div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn-sec" id="test">تجربة الاتصال</button>
+    </div>
+    <div class="msg" id="setupMsg"></div>
+  </div>
+
+  <!-- ٢- الفولدر -->
+  <div class="card">
+    <h2>٢- فولدر الأحكام</h2>
+    <div class="row">
+      <button class="btn-sec" id="pick">اختيار الفولدر</button>
+      <span id="folderName" class="muted">لم يتم اختيار فولدر</span>
+    </div>
+    <div class="hint">اختار «احكام pdf» عشان يرفع كل الشهور بكل الأعضاء، أو فولدر شهر واحد. فولدرات «نتائج الفرز» بيتخطاها عشان متتكررش.</div>
+    <label class="chk"><input type="checkbox" id="silent" checked> رفع بدون إشعارات لأعضاء القناة</label>
+    <div class="stats" id="stats" style="display:none">
+      <div class="stat"><b id="sTotal">٠</b><span>كل الأحكام</span></div>
+      <div class="stat"><b id="sDone">٠</b><span>اترفعت قبل كده</span></div>
+      <div class="stat"><b id="sLeft">٠</b><span>هتترفع</span></div>
+      <div class="stat"><b id="sBig">٠</b><span>أكبر من ٥٠ ميجا</span></div>
+    </div>
+  </div>
+
+  <!-- ٣- الرفع -->
+  <div class="card">
+    <h2>٣- الرفع</h2>
+    <div class="row">
+      <button class="btn-pri" id="start" disabled>ابدأ الرفع</button>
+      <button class="btn-stop" id="stop" style="display:none">إيقاف مؤقت</button>
+    </div>
+    <div class="bar"><div id="bar"></div></div>
+    <div id="progress" class="muted"></div>
+    <div class="hint">سيب الصفحة مفتوحة واللاب على الشاحن. لو قفلت أو النت قطع، افتح البرنامج تاني واختار نفس الفولدر، وهيكمل من مكان ما وقف.</div>
+    <ul id="log"></ul>
+  </div>
+</div>
+
+<script>
+const VERSION = "١", VERSIONS = { "١": "٢١-١١-٢٠٢٦" };
+const SKIP_DIRS = ["نتائج الفرز"];
+const LOG_FILE = "سجل رفع تليجرام.json";
+const MAX_SIZE = 50 * 1024 * 1024;   // حد Bot API للملف
+const GAP_MS = 3200;                  // تليجرام: حوالي ٢٠ رسالة في الدقيقة للقناة
+
+const $ = id => document.getElementById(id);
+const toWest = s => String(s).replace(/[٠-٩]/g, d => d.charCodeAt(0) - 0x660).replace(/[۰-۹]/g, d => d.charCodeAt(0) - 0x6F0);
+const toArab = s => String(s).replace(/[0-9]/g, d => String.fromCharCode(0x660 + +d));
+const ls = { get(k){ try { return localStorage.getItem(k); } catch(e){ return null; } },
+             set(k,v){ try { localStorage.setItem(k,v); } catch(e){} } };
+
+$("ver").onclick = () => alert("نسخة " + VERSION + " — تاريخ الإنشاء: " + VERSIONS[VERSION]);
+$("token").value = ls.get("tg_token") || "";
+$("chat").value = ls.get("tg_chat") || "";
+$("token").onchange = () => ls.set("tg_token", $("token").value.trim());
+$("chat").onchange = () => ls.set("tg_chat", $("chat").value.trim());
+
+// ---------- تليجرام ----------
+async function tg(method, body) {
+  const token = $("token").value.trim();
+  if (!token) throw new Error("اكتب توكن البوت الأول.");
+  const r = await fetch(`https://api.telegram.org/bot${token}/${method}`, { method: "POST", body });
+  let j; try { j = await r.json(); } catch(e) { throw new Error("رد غير مفهوم من تليجرام (" + r.status + ")"); }
+  return j;
+}
+function setupMsg(t, c) { $("setupMsg").textContent = t; $("setupMsg").className = "msg " + (c || ""); }
+
+$("getChat").onclick = async () => {
+  setupMsg("جاري البحث…");
+  try {
+    const j = await tg("getUpdates", new URLSearchParams({ allowed_updates: '["channel_post","my_chat_member"]' }));
+    if (!j.ok) throw new Error(j.description);
+    const chats = {};
+    for (const u of j.result) {
+      const c = (u.channel_post || u.my_chat_member || {}).chat;
+      if (c && c.type === "channel") chats[c.id] = c.title;
+    }
+    const ids = Object.keys(chats);
+    if (!ids.length) { setupMsg("ملقيتش القناة. اتأكد إن البوت أدمن، وابعت رسالة جديدة في القناة، وجرّب تاني.", "warn"); return; }
+    const id = ids[ids.length - 1];
+    $("chat").value = id; ls.set("tg_chat", id);
+    setupMsg(`تمام: القناة «${chats[id]}»`, "ok");
+  } catch (e) { setupMsg("خطأ: " + e.message, "err"); }
+};
+
+$("test").onclick = async () => {
+  setupMsg("جاري التجربة…");
+  try {
+    const me = await tg("getMe");
+    if (!me.ok) throw new Error("التوكن غلط: " + me.description);
+    const chat = $("chat").value.trim();
+    if (!chat) throw new Error("اكتب رقم القناة أو اضغط «جلب رقم القناة».");
+    const c = await tg("getChat", new URLSearchParams({ chat_id: chat }));
+    if (!c.ok) throw new Error("مش قادر يوصل للقناة — اتأكد إن البوت أدمن فيها. (" + c.description + ")");
+    const m = await tg("getChatMember", new URLSearchParams({ chat_id: chat, user_id: me.result.id }));
+    if (!m.ok || m.result.status !== "administrator" || m.result.can_post_messages === false)
+      throw new Error("البوت لازم يكون أدمن في القناة وعنده صلاحية نشر الرسائل.");
+    ls.set("tg_token", $("token").value.trim()); ls.set("tg_chat", chat);
+    setupMsg(`الاتصال تمام ✓ البوت @${me.result.username} → القناة «${c.result.title}»${c.result.username ? " (عامة!)" : " (خاصة)"}`, c.result.username ? "warn" : "ok");
+  } catch (e) { setupMsg(e.message, "err"); }
+};
+
+// ---------- قراءة الأسماء ----------
+const D = "0-9٠-٩۰-۹";
+const rxLead = new RegExp("^[\\s_\\-]*(?:حكم[\\s_]*)?(?:رقم[\\s_]*)?([" + D + "]+)");
+const rxBefore = new RegExp("(?:^|[^" + D + "])([" + D + "]+)[\\s_\\-]*لسنة");
+const rxYear = new RegExp("لسنة[\\s_\\-]*([" + D + "]{2,3})");
+const rxMember = /عضو[\s_]*([0-9٠-٩A-Za-z+]+)/;
+
+function info(name, path) {
+  const b = name.replace(/\.pdf$/i, "");
+  const m = b.match(rxLead) || b.match(rxBefore);
+  const y = b.match(rxYear);
+  const mem = (path.split(" / ").reverse().map(p => p.match(rxMember)).find(Boolean)) || b.match(rxMember);
+  return { num: m ? toWest(m[1]) : null, year: y ? toWest(y[1]) : null,
+           member: mem ? toWest(mem[1]) : (path.includes("بدون عضو") ? "بدون" : null) };
+}
+
+function caption(f) {
+  const i = f.info, L = [];
+  L.push("⚖️ " + (i.num ? `حكم رقم ${toArab(i.num)}${i.year ? " لسنة " + toArab(i.year) + "ق" : ""}` : f.name.replace(/\.pdf$/i, "")));
+  if (i.member) L.push("العضو: " + (i.member === "بدون" ? "بدون عضو" : toArab(i.member)));
+  if (f.path) L.push("📁 " + f.path);
+  const tags = [];
+  if (i.num) tags.push("#ط" + i.num);
+  if (i.year) tags.push("#سنة" + i.year);
+  if (i.member && i.member !== "بدون") tags.push("#عضو" + i.member.replace(/\+/g, "_"));
+  if (tags.length) L.push(tags.join(" "));
+  return L.join("\n").slice(0, 1000);
+}
+
+// ---------- الفولدر والسجل ----------
+let dirHandle = null, files = [], doneMap = {}, running = false;
+
+async function* walk(dir, path) {
+  for await (const [name, h] of dir.entries()) {
+    if (h.kind === "directory") {
+      if (SKIP_DIRS.includes(name)) continue;
+      yield* walk(h, path ? path + " / " + name : name);
+    } else if (/\.pdf$/i.test(name)) yield { name, h, path };
+  }
+}
+const keyOf = (name, size) => name + "|" + size;
+
+async function readLog() {
+  doneMap = {};
+  try { Object.assign(doneMap, JSON.parse(ls.get("tg_done_" + dirHandle.name) || "{}")); } catch(e) {}
+  try {
+    const fh = await dirHandle.getFileHandle(LOG_FILE);
+    Object.assign(doneMap, JSON.parse(await (await fh.getFile()).text()));
+  } catch(e) {}
+}
+async function saveLog() {
+  const txt = JSON.stringify(doneMap);
+  ls.set("tg_done_" + dirHandle.name, txt);
+  try {
+    const fh = await dirHandle.getFileHandle(LOG_FILE, { create: true });
+    const w = await fh.createWritable(); await w.write(txt); await w.close();
+  } catch(e) { addLog("⚠ مش قادر يحفظ ملف السجل: " + e.message, "warn"); }
+}
+
+$("pick").onclick = async () => {
+  if (!window.showDirectoryPicker) { alert("افتح البرنامج بـ Microsoft Edge أو Google Chrome."); return; }
+  try { dirHandle = await window.showDirectoryPicker({ id: "tg-archive", mode: "readwrite" }); } catch(e) { return; }
+  $("folderName").textContent = dirHandle.name + " — جاري العد…"; $("folderName").className = "";
+  files = [];
+  for await (const f of walk(dirHandle, "")) {
+    const file = await f.h.getFile();
+    files.push({ ...f, size: file.size, info: info(f.name, f.path) });
+  }
+  files.sort((a, b) => a.path.localeCompare(b.path, "ar") || (+(a.info.num || 0)) - (+(b.info.num || 0)) || a.name.localeCompare(b.name, "ar"));
+  await readLog();
+  refreshStats();
+  $("folderName").textContent = dirHandle.name;
+  $("stats").style.display = "grid";
+  $("start").disabled = !files.some(f => !doneMap[keyOf(f.name, f.size)] && f.size <= MAX_SIZE);
+};
+
+function refreshStats() {
+  const done = files.filter(f => doneMap[keyOf(f.name, f.size)]).length;
+  const big = files.filter(f => f.size > MAX_SIZE && !doneMap[keyOf(f.name, f.size)]).length;
+  $("sTotal").textContent = toArab(files.length);
+  $("sDone").textContent = toArab(done);
+  $("sLeft").textContent = toArab(files.length - done - big);
+  $("sBig").textContent = toArab(big);
+  $("bar").style.width = (files.length ? done / files.length * 100 : 0) + "%";
+}
+function addLog(t, c) {
+  const li = document.createElement("li"); li.textContent = t; if (c) li.className = c;
+  $("log").prepend(li);
+  while ($("log").children.length > 300) $("log").lastChild.remove();
+}
+
+// انتظار مش بيتبطأ لما الصفحة تبقى في الخلفية (Worker)، ولو مش متاح يرجع لـ setTimeout
+let sleeper = null;
+try {
+  const src = "onmessage=e=>setTimeout(()=>postMessage(e.data[0]),e.data[1])";
+  sleeper = new Worker(URL.createObjectURL(new Blob([src], { type: "text/javascript" })));
+} catch(e) { sleeper = null; }
+let sleepId = 0; const sleepWaits = {};
+if (sleeper) sleeper.onmessage = e => { const r = sleepWaits[e.data]; delete sleepWaits[e.data]; r && r(); };
+const sleep = ms => new Promise(r => {
+  if (!sleeper) return setTimeout(r, ms);
+  const id = ++sleepId; sleepWaits[id] = r; sleeper.postMessage([id, ms]);
+});
+
+// ---------- الرفع ----------
+$("stop").onclick = () => { running = false; $("stop").disabled = true; $("progress").textContent = "هيقف بعد الملف الحالي…"; };
+
+$("start").onclick = async () => {
+  const chat = $("chat").value.trim();
+  if (!$("token").value.trim() || !chat) { alert("كمّل خطوة ١ الأول (التوكن ورقم القناة)."); return; }
+  if ((await dirHandle.queryPermission({ mode: "readwrite" })) !== "granted" &&
+      (await dirHandle.requestPermission({ mode: "readwrite" })) !== "granted") { alert("لازم توافق على الصلاحية."); return; }
+
+  const queue = files.filter(f => !doneMap[keyOf(f.name, f.size)] && f.size <= MAX_SIZE);
+  running = true;
+  $("start").style.display = "none"; $("stop").style.display = ""; $("stop").disabled = false; $("pick").disabled = true;
+  let wake = null; try { wake = await navigator.wakeLock.request("screen"); } catch(e) {}
+
+  let sent = 0, fails = 0, sinceSave = 0;
+  const t0 = Date.now();
+  for (const f of queue) {
+    if (!running) break;
+    const left = queue.length - sent;
+    const per = sent ? (Date.now() - t0) / sent : GAP_MS + 1500;
+    const mins = Math.round(left * per / 60000);
+    $("progress").textContent = `بيرفع: ${f.name} — فاضل ${toArab(left)} حكم (حوالي ${mins >= 60 ? toArab(Math.floor(mins/60)) + " ساعة و" : ""}${toArab(mins % 60)} دقيقة)`;
+
+    let ok = false;
+    for (let attempt = 0; attempt < 5 && !ok; attempt++) {
+      try {
+        const fd = new FormData();
+        fd.append("chat_id", chat);
+        fd.append("document", await f.h.getFile(), f.name);
+        fd.append("caption", caption(f));
+        if ($("silent").checked) fd.append("disable_notification", "true");
+        const j = await tg("sendDocument", fd);
+        if (j.ok) {
+          doneMap[keyOf(f.name, f.size)] = j.result.message_id;
+          ok = true;
+        } else if (j.error_code === 429) {
+          const w = ((j.parameters && j.parameters.retry_after) || 30) + 1;
+          $("progress").textContent = `تليجرام طالب استراحة ${toArab(w)} ثانية…`;
+          await sleep(w * 1000);
+        } else {
+          addLog(`✗ ${f.name}: ${j.description}`, "err");
+          if (j.error_code === 400 || j.error_code === 403) break;
+          await sleep(5000);
+        }
+      } catch (e) {
+        addLog(`⚠ مشكلة نت — هيحاول تاني (${f.name})`, "warn");
+        await sleep(15000);
+      }
+    }
+
+    if (ok) {
+      sent++; fails = 0; sinceSave++;
+      addLog(`✓ ${f.info.num ? toArab(f.info.num) : f.name}${f.path ? " — " + f.path : ""}`, "ok");
+      if (sinceSave >= 10) { await saveLog(); sinceSave = 0; }
+      refreshStats();
+    } else if (++fails >= 5) {
+      addLog("وقفت بعد ٥ أخطاء ورا بعض — راجع النت أو إعدادات البوت.", "err");
+      break;
+    }
+    await sleep(GAP_MS);
+  }
+
+  await saveLog();
+  refreshStats();
+  try { wake && wake.release(); } catch(e) {}
+  running = false;
+  $("stop").style.display = "none"; $("start").style.display = ""; $("pick").disabled = false;
+  const remaining = files.filter(f => !doneMap[keyOf(f.name, f.size)] && f.size <= MAX_SIZE).length;
+  $("start").disabled = !remaining;
+  $("progress").textContent = remaining
+    ? `اتوقف — اترفع ${toArab(sent)} حكم دلوقتي، وفاضل ${toArab(remaining)}. اضغط «ابدأ الرفع» للمتابعة.`
+    : `خلص ✓ اترفع ${toArab(sent)} حكم دلوقتي، وكل الأحكام في الفولدر بقت على القناة.`;
+  $("progress").className = remaining ? "warn" : "ok";
+};
+
+// لو حد حاول يقفل الصفحة وهي بترفع
+window.addEventListener("beforeunload", e => { if (running) { e.preventDefault(); e.returnValue = ""; } });
+</script>
+</body>
+</html>
