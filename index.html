@@ -41,7 +41,7 @@
 <div class="wrap">
   <header>
     <h1>أرشيف الأحكام على تليجرام</h1>
-    <span class="ver" id="ver" title="اضغط لعرض تاريخ النسخة">نسخة ١ · ٢١-١١-٢٠٢٦</span>
+    <span class="ver" id="ver" title="اضغط لعرض تاريخ النسخة">نسخة ٢ · ٢١-١١-٢٠٢٦</span>
   </header>
 
   <!-- ١- الإعدادات -->
@@ -90,12 +90,22 @@
     <div class="hint">سيب الصفحة مفتوحة واللاب على الشاحن. لو قفلت أو النت قطع، افتح البرنامج تاني واختار نفس الفولدر، وهيكمل من مكان ما وقف.</div>
     <ul id="log"></ul>
   </div>
+
+  <!-- ٤- الفهرس -->
+  <div class="card">
+    <h2>٤- فهرس pdf tools</h2>
+    <div class="hint" style="margin-top:0">ملف فيه رقم كل حكم ولينكه على القناة. بتحمّله في pdf tools، فلما تدوّر برقم الدعوى يظهرلك زرار «افتح الحكم على تليجرام». البرنامج بيحدّثه لوحده في الفولدر بعد كل رفع.</div>
+    <label class="chk"><input type="checkbox" id="idxSend" checked> ابعت الفهرس على القناة كمان (عشان تحمّله على الموبايل)</label>
+    <div class="row" style="margin-top:10px"><button class="btn-sec" id="exportIdx">📑 تحديث الفهرس</button></div>
+    <div class="msg" id="idxMsg"></div>
+  </div>
 </div>
 
 <script>
-const VERSION = "١", VERSIONS = { "١": "٢١-١١-٢٠٢٦" };
+const VERSION = "٢", VERSIONS = { "١": "٢١-١١-٢٠٢٦", "٢": "٢١-١١-٢٠٢٦" };
 const SKIP_DIRS = ["نتائج الفرز"];
 const LOG_FILE = "سجل رفع تليجرام.json";
+const INDEX_FILE = "فهرس تليجرام.json";
 const MAX_SIZE = 50 * 1024 * 1024;   // حد Bot API للملف
 const GAP_MS = 3200;                  // تليجرام: حوالي ٢٠ رسالة في الدقيقة للقناة
 
@@ -151,7 +161,7 @@ $("test").onclick = async () => {
     const m = await tg("getChatMember", new URLSearchParams({ chat_id: chat, user_id: me.result.id }));
     if (!m.ok || m.result.status !== "administrator" || m.result.can_post_messages === false)
       throw new Error("البوت لازم يكون أدمن في القناة وعنده صلاحية نشر الرسائل.");
-    ls.set("tg_token", $("token").value.trim()); ls.set("tg_chat", chat);
+    ls.set("tg_token", $("token").value.trim()); ls.set("tg_chat", chat); ls.set("tg_user", c.result.username || "");
     setupMsg(`الاتصال تمام ✓ البوت @${me.result.username} → القناة «${c.result.title}»${c.result.username ? " (عامة!)" : " (خاصة)"}`, c.result.username ? "warn" : "ok");
   } catch (e) { setupMsg(e.message, "err"); }
 };
@@ -186,7 +196,7 @@ function caption(f) {
 }
 
 // ---------- الفولدر والسجل ----------
-let dirHandle = null, files = [], doneMap = {}, running = false;
+let dirHandle = null, files = [], doneMap = {}, running = false, subLogs = [];
 
 async function* walk(dir, path) {
   for await (const [name, h] of dir.entries()) {
@@ -194,6 +204,7 @@ async function* walk(dir, path) {
       if (SKIP_DIRS.includes(name)) continue;
       yield* walk(h, path ? path + " / " + name : name);
     } else if (/\.pdf$/i.test(name)) yield { name, h, path };
+    else if (name === LOG_FILE && path) subLogs.push(h);
   }
 }
 const keyOf = (name, size) => name + "|" + size;
@@ -205,6 +216,8 @@ async function readLog() {
     const fh = await dirHandle.getFileHandle(LOG_FILE);
     Object.assign(doneMap, JSON.parse(await (await fh.getFile()).text()));
   } catch(e) {}
+  // سجلات قديمة جوه فولدرات فرعية (لو اترفع قبل كده من فولدر شهر لوحده)
+  for (const h of subLogs) { try { Object.assign(doneMap, JSON.parse(await (await h.getFile()).text())); } catch(e) {} }
 }
 async function saveLog() {
   const txt = JSON.stringify(doneMap);
@@ -215,11 +228,56 @@ async function saveLog() {
   } catch(e) { addLog("⚠ مش قادر يحفظ ملف السجل: " + e.message, "warn"); }
 }
 
+// ---------- فهرس pdf tools ----------
+function msgLink(id) {
+  const user = ls.get("tg_user"), chat = $("chat").value.trim();
+  if (user) return `https://t.me/${user}/${id}`;
+  return `https://t.me/c/${chat.replace(/^-100/, "")}/${id}`;
+}
+function buildIndex() {
+  const items = [];
+  for (const f of files) {
+    const id = doneMap[keyOf(f.name, f.size)];
+    if (!id || !f.info.num) continue;
+    items.push({ no: f.info.num, yr: f.info.year || "", m: f.info.member || "", link: msgLink(id), f: f.name.replace(/\.pdf$/i, "") });
+  }
+  return { type: "tg-judgments-index", savedAt: Date.now(), folder: dirHandle.name, items };
+}
+async function writeIndex() {
+  const idx = buildIndex(), txt = JSON.stringify(idx);
+  const fh = await dirHandle.getFileHandle(INDEX_FILE, { create: true });
+  const w = await fh.createWritable(); await w.write(txt); await w.close();
+  return { idx, txt };
+}
+$("exportIdx").onclick = async () => {
+  if (!dirHandle) { alert("اختار الفولدر الأول."); return; }
+  $("idxMsg").textContent = "جاري تجهيز الفهرس…"; $("idxMsg").className = "msg";
+  try {
+    if (!ls.get("tg_user") && ls.get("tg_user") !== "") {
+      const c = await tg("getChat", new URLSearchParams({ chat_id: $("chat").value.trim() }));
+      if (c.ok) ls.set("tg_user", c.result.username || "");
+    }
+    const { idx, txt } = await writeIndex();
+    let sentMsg = "";
+    if ($("idxSend").checked) {
+      const fd = new FormData();
+      fd.append("chat_id", $("chat").value.trim());
+      fd.append("document", new File([txt], INDEX_FILE, { type: "application/json" }));
+      fd.append("caption", `📑 فهرس الأحكام — ${toArab(idx.items.length)} حكم — ${new Date().toLocaleDateString("ar-EG")}\nحمّله في pdf tools ← البحث العام ← الرولات المضافة ← تليجرام\n#فهرس`);
+      fd.append("disable_notification", "true");
+      const j = await tg("sendDocument", fd);
+      sentMsg = j.ok ? " واتبعت على القناة (دوّر عليه بـ #فهرس)" : " — بس مااتبعتش على القناة: " + j.description;
+    }
+    $("idxMsg").textContent = `تم ✓ الفهرس فيه ${toArab(idx.items.length)} حكم، واتحفظ في «${INDEX_FILE}» جوه «${dirHandle.name}»` + sentMsg;
+    $("idxMsg").className = "msg ok";
+  } catch (e) { $("idxMsg").textContent = "خطأ: " + e.message; $("idxMsg").className = "msg err"; }
+};
+
 $("pick").onclick = async () => {
   if (!window.showDirectoryPicker) { alert("افتح البرنامج بـ Microsoft Edge أو Google Chrome."); return; }
   try { dirHandle = await window.showDirectoryPicker({ id: "tg-archive", mode: "readwrite" }); } catch(e) { return; }
   $("folderName").textContent = dirHandle.name + " — جاري العد…"; $("folderName").className = "";
-  files = [];
+  files = []; subLogs = [];
   for await (const f of walk(dirHandle, "")) {
     const file = await f.h.getFile();
     files.push({ ...f, size: file.size, info: info(f.name, f.path) });
@@ -323,6 +381,7 @@ $("start").onclick = async () => {
   }
 
   await saveLog();
+  try { await writeIndex(); } catch(e) {}
   refreshStats();
   try { wake && wake.release(); } catch(e) {}
   running = false;
