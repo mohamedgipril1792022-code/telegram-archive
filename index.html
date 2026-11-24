@@ -41,7 +41,7 @@
 <div class="wrap">
   <header>
     <h1>أرشيف الأحكام على تليجرام</h1>
-    <span class="ver" id="ver" title="اضغط لعرض تاريخ النسخة">نسخة ٢ · ٢١-١١-٢٠٢٦</span>
+    <span class="ver" id="ver" title="اضغط لعرض تاريخ النسخة">نسخة ٤ · ٢٤-١١-٢٠٢٦</span>
   </header>
 
   <!-- ١- الإعدادات -->
@@ -68,8 +68,9 @@
       <button class="btn-sec" id="pick">اختيار الفولدر</button>
       <span id="folderName" class="muted">لم يتم اختيار فولدر</span>
     </div>
-    <div class="hint">اختار «احكام pdf» عشان يرفع كل الشهور بكل الأعضاء، أو فولدر شهر واحد. فولدرات «نتائج الفرز» بيتخطاها عشان متتكررش.</div>
+    <div class="hint">اختار «احكام pdf» عشان يرفع كل الشهور بكل الأعضاء، أو فولدر شهر واحد. بيرفع ملفات PDF وملفات الورد (doc / docx). فولدرات «نتائج الفرز» بيتخطاها عشان متتكررش.</div>
     <label class="chk"><input type="checkbox" id="silent" checked> رفع بدون إشعارات لأعضاء القناة</label>
+    <label class="chk"><input type="checkbox" id="skipDup" checked> تخطي أي ملف (PDF أو ورد) لو نفس الحكم بنفس الاسم اترفع قبل كده بصيغة تانية</label>
     <div class="stats" id="stats" style="display:none">
       <div class="stat"><b id="sTotal">٠</b><span>كل الأحكام</span></div>
       <div class="stat"><b id="sDone">٠</b><span>اترفعت قبل كده</span></div>
@@ -102,12 +103,13 @@
 </div>
 
 <script>
-const VERSION = "٢", VERSIONS = { "١": "٢١-١١-٢٠٢٦", "٢": "٢١-١١-٢٠٢٦" };
+const VERSION = "٤", VERSIONS = { "١": "٢١-١١-٢٠٢٦", "٢": "٢١-١١-٢٠٢٦", "٣": "٢٤-١١-٢٠٢٦", "٤": "٢٤-١١-٢٠٢٦" };
 const SKIP_DIRS = ["نتائج الفرز"];
 const LOG_FILE = "سجل رفع تليجرام.json";
 const INDEX_FILE = "فهرس تليجرام.json";
 const MAX_SIZE = 50 * 1024 * 1024;   // حد Bot API للملف
 const GAP_MS = 3200;                  // تليجرام: حوالي ٢٠ رسالة في الدقيقة للقناة
+const DOC_RX = /\.(pdf|docx?)$/i;     // الصيغ المقبولة: pdf و doc و docx
 
 const $ = id => document.getElementById(id);
 const toWest = s => String(s).replace(/[٠-٩]/g, d => d.charCodeAt(0) - 0x660).replace(/[۰-۹]/g, d => d.charCodeAt(0) - 0x6F0);
@@ -174,7 +176,7 @@ const rxYear = new RegExp("لسنة[\\s_\\-]*([" + D + "]{2,3})");
 const rxMember = /عضو[\s_]*([0-9٠-٩A-Za-z+]+)/;
 
 function info(name, path) {
-  const b = name.replace(/\.pdf$/i, "");
+  const b = name.replace(DOC_RX, "");
   const m = b.match(rxLead) || b.match(rxBefore);
   const y = b.match(rxYear);
   const mem = (path.split(" / ").reverse().map(p => p.match(rxMember)).find(Boolean)) || b.match(rxMember);
@@ -184,7 +186,7 @@ function info(name, path) {
 
 function caption(f) {
   const i = f.info, L = [];
-  L.push("⚖️ " + (i.num ? `حكم رقم ${toArab(i.num)}${i.year ? " لسنة " + toArab(i.year) + "ق" : ""}` : f.name.replace(/\.pdf$/i, "")));
+  L.push("⚖️ " + (i.num ? `حكم رقم ${toArab(i.num)}${i.year ? " لسنة " + toArab(i.year) + "ق" : ""}` : f.name.replace(DOC_RX, "")));
   if (i.member) L.push("العضو: " + (i.member === "بدون" ? "بدون عضو" : toArab(i.member)));
   if (f.path) L.push("📁 " + f.path);
   const tags = [];
@@ -203,11 +205,22 @@ async function* walk(dir, path) {
     if (h.kind === "directory") {
       if (SKIP_DIRS.includes(name)) continue;
       yield* walk(h, path ? path + " / " + name : name);
-    } else if (/\.pdf$/i.test(name)) yield { name, h, path };
+    } else if (DOC_RX.test(name) && !name.startsWith("~$")) yield { name, h, path };   // ~$ = ملفات ورد مؤقتة
     else if (name === LOG_FILE && path) subLogs.push(h);
   }
 }
 const keyOf = (name, size) => name + "|" + size;
+
+// تجنب التكرار: الملف يعتبر "اترفع" لو نفس الاسم والحجم في السجل،
+// أو (لو الخيار شغال) لو نفس الفولدر ونفس الاسم من غير الامتداد اترفع بصيغة تانية
+const baseOf = f => f.path + "/" + f.name.replace(DOC_RX, "");
+let doneBase = new Set();
+function rebuildBase() { doneBase = new Set(files.filter(f => doneMap[keyOf(f.name, f.size)]).map(baseOf)); }
+function isDone(f) {
+  if (doneMap[keyOf(f.name, f.size)]) return true;
+  return $("skipDup").checked && doneBase.has(baseOf(f));
+}
+$("skipDup").onchange = () => { if (!files.length) return; refreshStats(); if (!running) $("start").disabled = !files.some(f => !isDone(f) && f.size <= MAX_SIZE); };
 
 async function readLog() {
   doneMap = {};
@@ -239,7 +252,7 @@ function buildIndex() {
   for (const f of files) {
     const id = doneMap[keyOf(f.name, f.size)];
     if (!id || !f.info.num) continue;
-    items.push({ no: f.info.num, yr: f.info.year || "", m: f.info.member || "", link: msgLink(id), f: f.name.replace(/\.pdf$/i, "") });
+    items.push({ no: f.info.num, yr: f.info.year || "", m: f.info.member || "", link: msgLink(id), f: f.name.replace(DOC_RX, "") });
   }
   return { type: "tg-judgments-index", savedAt: Date.now(), folder: dirHandle.name, items };
 }
@@ -287,12 +300,13 @@ $("pick").onclick = async () => {
   refreshStats();
   $("folderName").textContent = dirHandle.name;
   $("stats").style.display = "grid";
-  $("start").disabled = !files.some(f => !doneMap[keyOf(f.name, f.size)] && f.size <= MAX_SIZE);
+  $("start").disabled = !files.some(f => !isDone(f) && f.size <= MAX_SIZE);
 };
 
 function refreshStats() {
-  const done = files.filter(f => doneMap[keyOf(f.name, f.size)]).length;
-  const big = files.filter(f => f.size > MAX_SIZE && !doneMap[keyOf(f.name, f.size)]).length;
+  rebuildBase();
+  const done = files.filter(f => isDone(f)).length;
+  const big = files.filter(f => f.size > MAX_SIZE && !isDone(f)).length;
   $("sTotal").textContent = toArab(files.length);
   $("sDone").textContent = toArab(done);
   $("sLeft").textContent = toArab(files.length - done - big);
@@ -327,7 +341,11 @@ $("start").onclick = async () => {
   if ((await dirHandle.queryPermission({ mode: "readwrite" })) !== "granted" &&
       (await dirHandle.requestPermission({ mode: "readwrite" })) !== "granted") { alert("لازم توافق على الصلاحية."); return; }
 
-  const queue = files.filter(f => !doneMap[keyOf(f.name, f.size)] && f.size <= MAX_SIZE);
+  rebuildBase();
+  const queue = files.filter(f => !isDone(f) && f.size <= MAX_SIZE);
+  const wordCount = queue.filter(f => /\.docx?$/i.test(f.name)).length;
+  if (!queue.length) { alert("مفيش حاجة جديدة تترفع."); return; }
+  if (!confirm(`هيرفع ${toArab(queue.length)} ملف (منهم ${toArab(wordCount)} ملف ورد).\nاللي اترفع قبل كده هيتخطاه.\n\nنكمّل؟`)) return;
   running = true;
   $("start").style.display = "none"; $("stop").style.display = ""; $("stop").disabled = false; $("pick").disabled = true;
   let wake = null; try { wake = await navigator.wakeLock.request("screen"); } catch(e) {}
@@ -386,7 +404,7 @@ $("start").onclick = async () => {
   try { wake && wake.release(); } catch(e) {}
   running = false;
   $("stop").style.display = "none"; $("start").style.display = ""; $("pick").disabled = false;
-  const remaining = files.filter(f => !doneMap[keyOf(f.name, f.size)] && f.size <= MAX_SIZE).length;
+  const remaining = files.filter(f => !isDone(f) && f.size <= MAX_SIZE).length;
   $("start").disabled = !remaining;
   $("progress").textContent = remaining
     ? `اتوقف — اترفع ${toArab(sent)} حكم دلوقتي، وفاضل ${toArab(remaining)}. اضغط «ابدأ الرفع» للمتابعة.`
